@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
 
 from urllib.parse import urlparse
 #def fab(max):
@@ -34,5 +33,19 @@ def call(i):
 import json
 import html
 from urllib import parse
-str_data = '''query_hash=e769aa130647d2354c40ea6a439bfc08&variables=%7B%22id%22%3A%224491871332%22%2C%22first%22%3A12%2C%22after%22%3A%22QVFBV3RnT0dwbXlQMXlGNDVjU3JKM2lwTWRIOFB3V0x3eXJyZU5GbGxQZlJWcUhXZHlqYkFQbkMxc3B1aGlwRV9tYXE2TEpIaDUwZ3RqOWZ5VHB5V2dDRg%3D%3D%22%7D'''
-print(parse.unquote(str_data))
+str_url = '''https://www.instagram.com/graphql/query/?                                                                   query_hash=e769aa130647d2354c40ea6a439bfc08&variables=%7B%22id%22%3A%226998411785%22%2C%22first%22%3A12%2C%22after%22%3A%22QVFCbEVIbzNoNGR     tUVNzTXl1VGdsNkQ5ZVZpa3Roa0c0YVJucVRQREpING40MDV0V2dIZUtfS25LOG91bXZNUWlKbmxOM1Z0ZTN4RFZpTXlYd25NaklZcw%3D%3D%22%7D'''
+print(str_url)
+print(parse.quote(parse.unquote(str_url)))
+
+
+import requests
+import requests.utils
+import pickle
+
+sessionfile = "./session-ghostwyd"
+session = requests.Session()
+with open(sessionfile, 'rb') as fp:
+    session.cookies = requests.utils.cookiejar_from_dict(pickle.load(fp))
+
+for key in session.cookies.get_dict():
+    print("{}:{}".format(key, session.cookies.get_dict()[key]))

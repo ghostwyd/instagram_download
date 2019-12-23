@@ -1,0 +1,23 @@
+access-control-expose-headers: X-IG-Set-WWW-Claim
+cache-control: private, no-cache, no-store, must-revalidate
+content-encoding: gzip
+content-language: zh-cn
+content-length: 3740
+content-security-policy: report-uri https://www.instagram.com/security/csp_report/; default-src 'self' https://www.instagram.com; img-src https: data: blob:; font-src https: data:; media-src 'self' blob: https://www.instagram.com https://*.cdninstagram.com https://*.fbcdn.net; manifest-src 'self' https://www.instagram.com; script-src 'self' https://instagram.com https://www.instagram.com https://*.www.instagram.com https://*.cdninstagram.com wss://www.instagram.com https://*.facebook.com https://*.fbcdn.net https://*.facebook.net 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' https://*.www.instagram.com https://www.instagram.com 'unsafe-inline'; connect-src 'self' https://instagram.com https://www.instagram.com https://*.www.instagram.com https://graph.instagram.com https://*.graph.instagram.com https://*.cdninstagram.com https://api.instagram.com wss://www.instagram.com wss://edge-chat.instagram.com https://*.facebook.com https://*.fbcdn.net https://*.facebook.net chrome-extension://boadgeojelhgndaghljhdicfkmllpafd blob:; worker-src 'self' blob: https://www.instagram.com; frame-src 'self' https://instagram.com https://www.instagram.com https://staticxx.facebook.com https://www.facebook.com https://web.facebook.com https://connect.facebook.net https://m.facebook.com; object-src 'none'; upgrade-insecure-requests
+content-type: application/json; charset=utf-8
+date: Fri, 20 Dec 2019 08:52:32 GMT
+expires: Sat, 01 Jan 2000 00:00:00 GMT
+pragma: no-cache
+set-cookie: csrftoken=friXbveODObl7AuVHMQda4zg3x82LpQv; Domain=.instagram.com; expires=Fri, 18-Dec-2020 08:52:32 GMT; Max-Age=31449600; Path=/; Secure
+set-cookie: rur=PRN; Domain=.instagram.com; HttpOnly; Path=/; Secure
+set-cookie: ds_user_id=5464193940; Domain=.instagram.com; expires=Thu, 19-Mar-2020 08:52:32 GMT; Max-Age=7776000; Path=/; Secure
+set-cookie: urlgen="{\"103.136.221.72\": 138699\054 \"103.136.221.71\": 138699}:1iiE1Q:vOvCJakuAVuqnFwWS64W8VEOcmg"; Domain=.instagram.com; HttpOnly; Path=/; Secure
+status: 200
+strict-transport-security: max-age=31536000
+vary: Accept-Language, Cookie, Accept-Encoding
+x-aed: 14
+x-content-type-options: nosniff
+x-fb-trip-id: 1679558926
+x-frame-options: SAMEORIGIN
+x-ig-set-www-claim: hmac.AR0nylk6LukIfTuq8H401Ul0uRG6YtPI-i8Zcef5Ms3o3-Po
+x-xss-protection: 0

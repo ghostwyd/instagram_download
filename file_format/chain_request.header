@@ -1,0 +1,18 @@
+:authority: www.instagram.com
+:method: GET
+:path: /graphql/query/?query_hash=c9100bf9110dd6361671f113dd02e7d6&variables=%7B%22user_id%22%3A%226998411785%22%2C%22include_chaining%22%3Atrue%2C%22include_reel%22%3Atrue%2C%22include_suggested_users%22%3Afalse%2C%22include_logged_out_extras%22%3Afalse%2C%22include_highlight_reels%22%3Afalse%2C%22include_related_profiles%22%3Afalse%7D
+:scheme: https
+accept: */*
+accept-encoding: gzip, deflate, br
+accept-language: zh-CN,zh;q=0.9
+cache-control: no-cache
+cookie: mid=XG0e8wAEAAEi9Acg6hgdNXya6uAV; ig_did=5A0D49C9-3347-46FB-BBEF-14F3F14932F1; fbm_124024574287414=base_domain=.instagram.com; fbsr_124024574287414=nl-rSk2O73kMhOEtoZL5prr-vwEzQRVTktR7jzHL3KU.eyJ1c2VyX2lkIjoiMTAwMDA1NjQ0MDg5MzY3IiwiY29kZSI6IkFRQ0xXcHNJcVBic2M3dHRDcjJXcDFRaF9pSG1kMXdBWVR0ZnNOcTBJUV9mLU13Wm1YQXd3bHZVSGdoZEFKT3RTYl93LU52YjhHNUFqdFVSZW5yOHZRLWpyMVFfNHcyTXBaeHNCUEFBZC1tTmlPMlg1QzBUTU8yZ19KdGRkWGVIeTlya0lFMHBmUUl4Z0xINFRZTlhHbUFXekZyeGxfeE93Z3NfU2NORWM1dmdwSTNnd3R2QV9JRGIxWlcwdHNjNWtGUU9pbUlGNmkwRWRCNHNGUHpQNkowcEhLdkp3clZCWktWSlpISzNEWWp0cVpxam5vZ2tZQkJvWG8tYjAzZHBFY1V6RjVvOFlhQzRXLTZuMVBqV25IZXJvMTBUc3BTeWhZTk9PbHhraHYtMUtqdnIyU3F1ZG1jVVhEWFBhRDkyYmxuS0M3SDVBanpyRzVSZHZrOXUtQWE1Iiwib2F1dGhfdG9rZW4iOiJFQUFCd3pMaXhuallCQUJtT05aQW5zcFpDeUZKMmhuRDNKMHUzcG1aQlpCUDI3b1hnaTZIQTNPSEpwNmtaQ25PeUhkalZJOVN1THNGQUFGUkltWkJtVE5lM2FkeFpCTER3MXo0ZlllWHBpNGFQdkRaQTQ5bG1ESHp2STNLUHRuTE9Ha1pCM1B4WkI2UzlFY3lBazFVN245eGRoenpFZWNISUFIS2RaQ3Y4RWJvaHYwc0JaQ2NHdFdlTks5dmwiLCJhbGdvcml0aG0iOiJITUFDLVNIQTI1NiIsImlzc3VlZF9hdCI6MTU3Njc1NzU5OX0; csrftoken=friXbveODObl7AuVHMQda4zg3x82LpQv; shbid=2248; shbts=1576757600.036072; ds_user_id=5464193940; sessionid=5464193940%3AT1mdKm3O2zMS3v%3A12; rur=PRN; urlgen="{\"103.136.221.72\": 138699\054 \"103.136.221.71\": 138699}:1iiE1P:7aycKCAcBpvFeiQqmlFoWpFReMc"
+pragma: no-cache
+referer: https://www.instagram.com/mintazure/
+sec-fetch-mode: cors
+sec-fetch-site: same-origin
+user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36
+x-csrftoken: friXbveODObl7AuVHMQda4zg3x82LpQv
+x-ig-app-id: 936619743392459
+x-ig-www-claim: hmac.AR0nylk6LukIfTuq8H401Ul0uRG6YtPI-i8Zcef5Ms3o3-Po
+x-requested-with: XMLHttpRequest
