@@ -49,3 +49,8 @@ with open(sessionfile, 'rb') as fp:
 
 for key in session.cookies.get_dict():
     print("{}:{}".format(key, session.cookies.get_dict()[key]))
+
+
+str_json = '{"a":1, "b":2}'
+import json
+print(type(json.loads(str_json)))
