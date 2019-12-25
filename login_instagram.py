@@ -17,14 +17,16 @@ from threading import Thread
 from queue import Queue
 from urllib import parse
 
-from util.util import print_dict
-from util.exception import BadStatusCodeException, BadStatusException
+from util.util import *
+#from util.exception import BadStatusCodeException, BadStatusException, ParamInvalidException
+from util.exception import *
 from util.file import mkdir
 
 read_begin_flag = False
 global_count = 2^16
 consume_count = 0
-crwal_count = 0
+crawl_count = 0
+thread_running = True
 
 def download_pics(queue:Queue, lock:threading.Lock):
     global consume_count
@@ -56,6 +58,7 @@ class Producer:
             #self._lock.release()
             break
 
+
 def default_http_header(empty_session_only:bool = False) -> Dict[str, str]:
     header = {'Accept-Encoding': 'gzip, deflate',
                   'Accept-Language': 'en-US,en;q=0.8',
@@ -83,17 +86,18 @@ def copy_session(session: requests.Session) -> requests.Session:
     return new
 
 def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
-    global crwal_count
-    url = []
+    global crawl_count
+    urls = []
     if edge['node']['__typename'] == 'GraphImage':
-        url = url.append(edge_node['node']['display_url'])
+        urls.append(edge['node']['display_url'])
+        print(urls)
         producer.produce({
                             'profile':user_profile,
                             'url': urls[-1],
                             'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
     elif edge['node']['__typename'] == 'GraphVideo':
         if edge['node']['is_video']:
-            urls = urls.append(edge['node']['video_url'])
+            urls.append(edge['node']['video_url'])
             producer.produce({
                                 'profile':user_profile,
                                 'url':urls[-1],
@@ -102,24 +106,65 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
         else:
             print("node is not video!")
     elif edge['node']['__typename'] == 'GraphSidecar':
+        template_params = {
+                            "child_comment_count":3,
+                            "fetch_comment_count":40,
+                            "parent_comment_count":24,
+                            "has_threaded_comments":True}
+
+        #print(json.dumps(edge['node'], indent=2))
+        if 'edge_sidecar_to_children' not in edge['node']:
+            template_params['shortcode'] = edge['node']['shortcode']
+            graphql_query_sidecar(user_profile, template_params)
+            return
         for edge in edge['node']['edge_sidecar_to_children']['edges']:
             if edge['node']['__typename'] == 'GraphImage':
-                urls = urls.append(edge['node']['display_url'])
+                urls.append(edge['node']['display_url'])
                 producer.produce({
                                     'profile':user_profile,
                                     'url': urls[-1],
                                     'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
             elif edge['node']['__typename'] == 'GraphVideo':
-                urls = urls.append(edge['node']['video_url'])
+                urls.append(edge['node']['video_url'])
                 producer.produce({
                                     'profile':user_profile,
                                     'url':urls[-1],
                                     'file_name':"{}/{}.mp4".format(user_profile._dst_dir, edge['node']['id'])})
 
-    print("download [{}/{}] {}".format(crawl_count, user_profile._post_count, ' '.join(url)))
+    print("download [{}/{}] {}".format(crawl_count, user_profile._post_count, ' '.join(urls)))
+
+def graphql_query_sidecar(user_profile: UserProfile, variables: Dict[str, any]):
+    grapql_query_template = "https://www.instagram.com/graphql/query/?{}"
+    with copy_session(user_profile._session) as tmpsession:
+        tmpsession.headers.update(default_http_header(empty_session_only=True))
+        tmpsession.headers['authority'] = 'www.instagram.com'
+        tmpsession.headers['scheme'] = 'https'
+        tmpsession.headers['accept'] = '*/*'
+        tmpsession.headers['referer'] = "https://www.instagram.com/{}/".format(user_profile._user_name)
+        tmpsession.headers['X-CSRFToken'] = user_profile._session.cookies.get_dict()["csrftoken"]
+
+        if 'shortcode' not in variables:
+            raise ParamInvalidException("shortcode not in parmas")
+
+        query_params = {'query_hash': '109cdd03d7468e12222ad164fbea3ca3', 'variables': variables}
+        print(grapql_query_template.format(parse_dict_2_query_params(query_params)))
+
+        with tmpsession.get(grapql_query_template.format(parse_dict_2_query_params(query_params))) as resp:
+            if resp.status_code != 200:
+                raise BadStatusCodeException("bad status_code:{}".format(resp.status_code))
+            resp_json = resp.json()
+            if resp_json['status'] != 'ok':
+                raise BadStatusException("status:{}".format(resp_json['status']))
+            edges = resp_json["data"]["shortcode_media"]['edge_sidecar_to_children']['edges']
+            for edge in edges:
+                print(json.dumps(edge, indent=2))
+                handle_edge(user_profile, edge)
 
 def get_profile(user_profile:UserProfile):
+    '''declear global variables'''
     global thread_running
+    global crawl_count
+
     profile_url = "https://www.instagram.com/{}/?__a=1".format(user_profile._user_name)
     with copy_session(user_profile._session) as tmpsession:
         resp = user_profile._session.get(profile_url)
@@ -144,7 +189,7 @@ def get_profile(user_profile:UserProfile):
         user_profile.set_end_cursor(end_cursor)
 
         for edge in user_info['edge_owner_to_timeline_media']['edges']:
-            crwal_count += 1
+            crawl_count += 1
             handle_edge(user_profile, edge)
         if not has_next:
             thread_running = False
@@ -182,12 +227,13 @@ def login() ->requests.Session:
 
 def graphql_query_post(user_profile:UserProfile):
     global thread_running
+    global global_count
+    global crawl_count
 
     #judge if user has any post
     if user_profile._post_count == 0:
         print("{} has not post anything yet!".format(user_profile._user_name))
         return
-    global global_count
     global_count = user_profile._post_count
 
     with copy_session(user_profile._session) as tmpsession:
@@ -200,30 +246,11 @@ def graphql_query_post(user_profile:UserProfile):
         tmpsession.headers['referer'] = "https://www.instagram.com/{}/".format(user_profile._user_name)
         tmpsession.headers['X-CSRFToken'] = user_profile._session.cookies.get_dict()["csrftoken"]
 
-        print_dict(tmpsession.cookies.get_dict())
-        print_dict(tmpsession.headers)
-
-
-        for i in range(5):
-            threads.append(Thread(target=download_pics, args=(queue, lock)))
-        for i in range(5):
-            threads[i].start()
-
         has_next = True
         while has_next:
             json_variable = {"id":user_profile._user_id, "after":user_profile._end_cursor, 'first':50}
-            query_data = {"query_hash":"e769aa130647d2354c40ea6a439bfc08", "variables":json.dumps(json_variable, separators=(',', ':'))}
-            str_params = ""
-            first = True
-            for key in query_data:
-                if first:
-                    first = False
-                    str_params = "{}={}".format(key, query_data[key])
-                else:
-                    str_params = "{}&{}={}".format(str_params, key, query_data[key])
-
-            str_html = "https://www.instagram.com/graphql/query/?{}".format(str_params)
-            print(str_html)
+            query_data = {"query_hash":"e769aa130647d2354c40ea6a439bfc08", "variables":json_variable}
+            str_html = "https://www.instagram.com/graphql/query/?{}".format(parse_dict_2_query_params(query_data))
             print(json.dumps(query_data,indent=2))
             resp = tmpsession.get(str_html)
 
@@ -242,12 +269,14 @@ def graphql_query_post(user_profile:UserProfile):
             end_cursor = page_info["end_cursor"]
             post_count = resp_json["data"]["user"]["edge_owner_to_timeline_media"]["count"]
             user_profile._end_cursor = end_cursor
-            print("count:{0}, hash_next:{1}, end_cursor:{2}, edge count:{3}".format(post_count, has_next, end_cursor, len(resp_json['data']['user']['edge_owner_to_timeline_media']['edges'])))
+            edges = resp_json['data']['user']['edge_owner_to_timeline_media']
+            print("count:{0}, hash_next:{1}, end_cursor:{2}, edge count:{3}".format(post_count, has_next, end_cursor, len(edges)))
             display_urls = [edge['node']['display_url'] for edge in resp_json["data"]['user']['edge_owner_to_timeline_media']['edges']]
 
             '''handle edge '''
             for edge in resp_json["data"]["user"]["edge_owner_to_timeline_media"]["edges"]:
                 crawl_count +=1
+                handle_edge(user_profile, edge)
 
             if not has_next:
                 thread_running = False
@@ -313,11 +342,15 @@ if __name__ == "__main__":
     thread_num = dict_args['thread_num']
     mkdir(user_profile._dst_dir)
 
-    '''concurrent parmas'''
+    '''start dowonlad thread'''
     threads = []
     queue = Queue()
     lock = threading.Lock()
     producer = Producer(queue, lock)
+    for i in range(thread_num):
+        threads.append(Thread(target=download_pics, args=(queue, lock)))
+    for i in range(thread_num):
+        threads[i].start()
 
     '''action'''
     user_profile.set_session(login())
@@ -327,7 +360,7 @@ if __name__ == "__main__":
     graphql_query_post(user_profile)
 
     '''stop  threads'''
-    time.sleep(20)
-    for i in range(5):
-        threads[i].join
+    time.sleep(200)
+    for i in range(thread_num):
+        threads[i].join()
     print("finish all threads")

@@ -33,8 +33,11 @@ def call(i):
 import json
 import html
 from urllib import parse
-str_url = '''https://www.instagram.com/graphql/query/?                                                                   query_hash=e769aa130647d2354c40ea6a439bfc08&variables=%7B%22id%22%3A%226998411785%22%2C%22first%22%3A12%2C%22after%22%3A%22QVFCbEVIbzNoNGR     tUVNzTXl1VGdsNkQ5ZVZpa3Roa0c0YVJucVRQREpING40MDV0V2dIZUtfS25LOG91bXZNUWlKbmxOM1Z0ZTN4RFZpTXlYd25NaklZcw%3D%3D%22%7D'''
-print(str_url)
+import sys
+str_url = '/graphql/query/?query_hash=109cdd03d7468e12222ad164fbea3ca3&variables=%7B%22shortcode%22%3A%22B6a4bLBh3hT%22%2C%22child_comment_count%22%3A3%2C%22fetch_comment_count%22%3A40%2C%22parent_comment_count%22%3A24%2C%22has_threaded_comments%22%3Atrue%7D'
+str_url = 'https://www.instagram.com/graphql_query?query_hash=c9100bf9110dd6361671f113dd02e7d6&variables={"child_comment_count":3,"fetch_comment_count":40,"parent_comment_count":24,"has_threaded_comments":true,"shortcode":"B6bEZIPBVPY"}'
+print(parse.unquote(str_url))
+sys.exit(0)
 print(parse.quote(parse.unquote(str_url)))
 
 
