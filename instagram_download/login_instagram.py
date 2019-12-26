@@ -245,7 +245,6 @@ def login() ->requests.Session:
         sys.exit(10)
 
     print(json.dumps(resp_json, indent=2))
-    print_dict(login.headers)
 
     if resp_json["status"] != 'ok':
         raise BadStatusException(resp_json["status"])
