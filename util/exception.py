@@ -14,3 +14,7 @@ class PathIsDirException(Exception):
 class ParamInvalidException(Exception):
     def __init(self, arg):
         self.argCodes = arg
+
+class LoginFailedException(Exception):
+    def __init(self, arg):
+        self.argCodes = arg

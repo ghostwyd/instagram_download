@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import urllib
-from typing import Dict
+from typing import Dict, Callable
 import os
 from user.user_profile import UserProfile
 import threading
@@ -18,7 +18,6 @@ from queue import Queue
 from urllib import parse
 
 from util.util import *
-#from util.exception import BadStatusCodeException, BadStatusException, ParamInvalidException
 from util.exception import *
 from util.file import mkdir
 
@@ -39,9 +38,9 @@ def download_pics(queue:Queue, lock:threading.Lock):
             break
         else:
             dict_info = queue.get()
-            save_pic(dict_info['profile'], dict_info['url'], dict_info['file_name'])
             consume_count += 1
             lock.release()
+            save_pic(dict_info['profile'], dict_info['url'], dict_info['file_name'])
 
 class Producer:
     def __init__(self, queue: Queue, lock:threading.Lock, handler:types.FunctionType=None):
@@ -86,38 +85,52 @@ def copy_session(session: requests.Session) -> requests.Session:
     return new
 
 def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
+    ''' declare global variables'''
     global crawl_count
+
+    '''shortcode query pattern'''
+    template_params = {
+                        "child_comment_count":3,
+                        "fetch_comment_count":40,
+                        "parent_comment_count":24,
+                        "has_threaded_comments":True}
+
     urls = []
-    if edge['node']['__typename'] == 'GraphImage':
-        urls.append(edge['node']['display_url'])
-        print(urls)
+    if edge['__typename'] == 'GraphImage':
+        urls.append(edge['display_url'])
+        file_type = get_post_format(urls[-1])
+        if file_type == '':
+            file_type = 'jpg'
         producer.produce({
                             'profile':user_profile,
                             'url': urls[-1],
-                            'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
-    elif edge['node']['__typename'] == 'GraphVideo':
-        if edge['node']['is_video']:
-            urls.append(edge['node']['video_url'])
+                            'file_name':"{}/{}.{}".format(user_profile._dst_dir, edge['id'], file_type)})
+    elif edge['__typename'] == 'GraphVideo':
+        if edge['is_video']:
+            #print(json.dumps(edge, indent=2))
+            if 'video_url' not in edge:
+                template_params['shortcode'] = edge['shortcode']
+                graphql_query_shortcode_video(user_profile, template_params)
+                return
+            urls.append(edge['video_url'])
+            file_type = get_post_format(urls[-1])
+            if file_type == '':
+                file_type = 'mp4'
+
             producer.produce({
                                 'profile':user_profile,
                                 'url':urls[-1],
-                                'file_name':"{}/{}.mp4".format(user_profile._dst_dir, edge['node']['id'])})
+                                'file_name':"{}/{}.{}".format(user_profile._dst_dir, edge['id'], file_type)})
 
         else:
             print("node is not video!")
-    elif edge['node']['__typename'] == 'GraphSidecar':
-        template_params = {
-                            "child_comment_count":3,
-                            "fetch_comment_count":40,
-                            "parent_comment_count":24,
-                            "has_threaded_comments":True}
-
-        #print(json.dumps(edge['node'], indent=2))
-        if 'edge_sidecar_to_children' not in edge['node']:
-            template_params['shortcode'] = edge['node']['shortcode']
-            graphql_query_sidecar(user_profile, template_params)
+    elif edge['__typename'] == 'GraphSidecar':
+        #print(json.dumps(edge, indent=2))
+        if 'edge_sidecar_to_children' not in edge:
+            template_params['shortcode'] = edge['shortcode']
+            graphql_query_shortcode_sidecar(user_profile, template_params)
             return
-        for edge in edge['node']['edge_sidecar_to_children']['edges']:
+        for edge in edge['edge_sidecar_to_children']['edges']:
             if edge['node']['__typename'] == 'GraphImage':
                 urls.append(edge['node']['display_url'])
                 producer.produce({
@@ -125,6 +138,7 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
                                     'url': urls[-1],
                                     'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
             elif edge['node']['__typename'] == 'GraphVideo':
+                #TODO:handle if video_url not exist in edge['node']
                 urls.append(edge['node']['video_url'])
                 producer.produce({
                                     'profile':user_profile,
@@ -133,7 +147,18 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
 
     print("download [{}/{}] {}".format(crawl_count, user_profile._post_count, ' '.join(urls)))
 
-def graphql_query_sidecar(user_profile: UserProfile, variables: Dict[str, any]):
+def graphql_query_shortcode_sidecar(user_profile: UserProfile, variables: Dict[str, any]):
+    edges = graphql_query_shortcode(user_profile, variables,
+                                    lambda b:b['data']['shortcode_media']['edge_sidecar_to_children']['edges'])
+    for edge in edges:
+        #print(json.dumps(edge, indent=2))
+        handle_edge(user_profile, edge['node'])
+
+def graphql_query_shortcode_video(user_profile: UserProfile, variables: Dict[str, any]):
+    video  = graphql_query_shortcode(user_profile, variables, lambda b:b['data']['shortcode_media'])
+    handle_edge(user_profile, video)
+
+def graphql_query_shortcode(user_profile: UserProfile, variables: Dict[str, any], extractor: Callable[[Dict[str,any]], Dict[str,any]]) ->Dict[str, any]:
     grapql_query_template = "https://www.instagram.com/graphql/query/?{}"
     with copy_session(user_profile._session) as tmpsession:
         tmpsession.headers.update(default_http_header(empty_session_only=True))
@@ -155,22 +180,21 @@ def graphql_query_sidecar(user_profile: UserProfile, variables: Dict[str, any]):
             resp_json = resp.json()
             if resp_json['status'] != 'ok':
                 raise BadStatusException("status:{}".format(resp_json['status']))
-            edges = resp_json["data"]["shortcode_media"]['edge_sidecar_to_children']['edges']
-            for edge in edges:
-                print(json.dumps(edge, indent=2))
-                handle_edge(user_profile, edge)
+            return extractor(resp_json)
 
 def get_profile(user_profile:UserProfile):
-    '''declear global variables'''
+    '''declare global variables'''
     global thread_running
     global crawl_count
 
     profile_url = "https://www.instagram.com/{}/?__a=1".format(user_profile._user_name)
+    print(profile_url)
     with copy_session(user_profile._session) as tmpsession:
         resp = user_profile._session.get(profile_url)
         if resp.status_code != 200:
             print("unexpected status_code:{}".format(resp.status_code))
             raise BadStatusCodeException(resp.status_code)
+
         resp_json = resp.json()
         user_info = resp_json["graphql"]["user"]
         print("user_id:{}, follow_count:{}, follower_count:{}".format(user_info["id"], user_info["edge_follow"]["count"], user_info["edge_followed_by"]))
@@ -190,7 +214,7 @@ def get_profile(user_profile:UserProfile):
 
         for edge in user_info['edge_owner_to_timeline_media']['edges']:
             crawl_count += 1
-            handle_edge(user_profile, edge)
+            handle_edge(user_profile, edge['node'])
         if not has_next:
             thread_running = False
 
@@ -205,8 +229,8 @@ def login() ->requests.Session:
     session.headers.update({'X-CSRFToken':session.cookies.get_dict()["csrftoken"]})
     print("csrftoken={}".format(session.cookies.get_dict()["csrftoken"]))
 
-    user = "yongdong.wu"
-    passwd = "wudong41*"
+    user = "ghostwyd"
+    passwd = "Wudong41+"
     login = session.post('https://www.instagram.com/accounts/login/ajax/',
                              data={'password': passwd, 'username': user}, allow_redirects=True)
 
@@ -220,8 +244,14 @@ def login() ->requests.Session:
         print("decode response error!")
         sys.exit(10)
 
+    print(json.dumps(resp_json, indent=2))
+    print_dict(login.headers)
+
     if resp_json["status"] != 'ok':
         raise BadStatusException(resp_json["status"])
+
+    if not resp_json['authenticated']:
+        raise LoginFailedException(resp_json['authenticated'])
 
     return session
 
@@ -233,6 +263,7 @@ def graphql_query_post(user_profile:UserProfile):
     #judge if user has any post
     if user_profile._post_count == 0:
         print("{} has not post anything yet!".format(user_profile._user_name))
+        thread_running = False
         return
     global_count = user_profile._post_count
 
@@ -251,8 +282,12 @@ def graphql_query_post(user_profile:UserProfile):
             json_variable = {"id":user_profile._user_id, "after":user_profile._end_cursor, 'first':50}
             query_data = {"query_hash":"e769aa130647d2354c40ea6a439bfc08", "variables":json_variable}
             str_html = "https://www.instagram.com/graphql/query/?{}".format(parse_dict_2_query_params(query_data))
-            print(json.dumps(query_data,indent=2))
-            resp = tmpsession.get(str_html)
+            try:
+                resp = tmpsession.get(str_html)
+            #except ConnectionResetError:
+            except:
+                time.sleep(10)
+                continue
 
             if resp.status_code != 200:
                 raise BadStatusCodeException(resp.status_code)
@@ -269,17 +304,20 @@ def graphql_query_post(user_profile:UserProfile):
             end_cursor = page_info["end_cursor"]
             post_count = resp_json["data"]["user"]["edge_owner_to_timeline_media"]["count"]
             user_profile._end_cursor = end_cursor
-            edges = resp_json['data']['user']['edge_owner_to_timeline_media']
+            edges = resp_json['data']['user']['edge_owner_to_timeline_media']['edges']
             print("count:{0}, hash_next:{1}, end_cursor:{2}, edge count:{3}".format(post_count, has_next, end_cursor, len(edges)))
-            display_urls = [edge['node']['display_url'] for edge in resp_json["data"]['user']['edge_owner_to_timeline_media']['edges']]
 
             '''handle edge '''
-            for edge in resp_json["data"]["user"]["edge_owner_to_timeline_media"]["edges"]:
+            for edge in edges:
+                #print(json.dumps(edge, indent=2))
                 crawl_count +=1
-                handle_edge(user_profile, edge)
+                handle_edge(user_profile, edge['node'])
 
             if not has_next:
                 thread_running = False
+
+            '''too much request will case 429'''
+            time.sleep(2)
 
 
 def save_pic(user_profile: UserProfile, url: str, file_name: str) ->bool:
@@ -295,8 +333,6 @@ def save_pic(user_profile: UserProfile, url: str, file_name: str) ->bool:
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
         "Referer": "https://www.instagram.com/{}/".format(user_profile._user_name),
-        #"Sec-Fetch-Mode": "no-cors",
-        #"Sec-Fetch-Site": "cross-site",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36"}
     with requests.get(url,headers=header) as resp:
         if resp.status_code != 200:
@@ -337,9 +373,11 @@ if __name__ == "__main__":
     dict_args = vars(args)
 
     user_name = dict_args["user"]
+    thread_num = dict_args['thread_num']
+
+    '''create UserProfile'''
     user_profile = UserProfile(user_name)
     user_profile.set_dst_dir(get_dst_dir(dict_args["download_dir"], user_name))
-    thread_num = dict_args['thread_num']
     mkdir(user_profile._dst_dir)
 
     '''start dowonlad thread'''
@@ -360,7 +398,6 @@ if __name__ == "__main__":
     graphql_query_post(user_profile)
 
     '''stop  threads'''
-    time.sleep(200)
     for i in range(thread_num):
         threads[i].join()
     print("finish all threads")

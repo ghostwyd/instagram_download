@@ -3,7 +3,8 @@ import json
 
 __all__ = [
         'print_dict',
-        'parse_dict_2_query_params'
+        'parse_dict_2_query_params',
+        'get_post_format'
         ]
 
 def print_dict(dict_cookie: Dict[str, str]):
@@ -24,3 +25,11 @@ def parse_dict_2_query_params(dict_params: Dict[str, any]) ->str:
 
     return "&".join(pairs)
 
+def get_post_format(url: str) ->str:
+    index1 = url.rfind('?')
+    if index1 == -1:
+        return  ''
+    index2 = url.rfind('.', 0, index1-1)
+    if index2 == -1:
+        return  ''
+    return url[index2+1:index1]
