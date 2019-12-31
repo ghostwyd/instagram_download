@@ -4,6 +4,7 @@ import json
 __all__ = [
         'print_dict',
         'parse_dict_2_query_params',
+        'default_http_header',
         'get_post_format'
         ]
 
@@ -33,3 +34,22 @@ def get_post_format(url: str) ->str:
     if index2 == -1:
         return  ''
     return url[index2+1:index1]
+
+def default_http_header(empty_session_only:bool = False) -> Dict[str, str]:
+    header = {'Accept-Encoding': 'gzip, deflate',
+                  'Accept-Language': 'en-US,en;q=0.8',
+                  'Connection': 'keep-alive',
+                  'Content-Length': '0',
+                  'Host': 'www.instagram.com',
+                  'Origin': 'https://www.instagram.com',
+                  'Referer': 'https://www.instagram.com/',
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Safari/605.1.15',
+                  'X-Instagram-AJAX': '1',
+                  'X-Requested-With': 'XMLHttpRequest'}
+    if empty_session_only:
+        del header['Host']
+        del header['Origin']
+        del header['Referer']
+        del header['X-Instagram-AJAX']
+        del header['X-Requested-With']
+    return header

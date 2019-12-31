@@ -1,2 +1,8 @@
 k.tt
 .DS_Store
+dist
+instagram_download.egg-info
+build
+instagram_download/session
+*/__pycache__/*
+*/session/*

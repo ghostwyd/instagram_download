@@ -8,7 +8,6 @@ import sys
 import urllib
 from typing import Dict, Callable
 import os
-from user.user_profile import UserProfile
 import threading
 import types
 import typing
@@ -16,66 +15,63 @@ import time
 from threading import Thread
 from queue import Queue
 from urllib import parse
+import pickle
 
+'''user define pkg'''
 from util.util import *
 from util.exception import *
 from util.file import mkdir
+from user.user_profile import *
 
-read_begin_flag = False
-global_count = 2^16
 consume_count = 0
 crawl_count = 0
-thread_running = True
 
-def download_pics(queue:Queue, lock:threading.Lock):
+def get_session_path(login_user) ->str:
+    session_path = "./session/"
+    return "{}/session-{}".format(session_path, login_user)
+
+def save_session(user_profile: UserProfile):
+    file_name = get_session_path(user_profile._login_user)
+    with open(get_session_path(user_profile._login_user), 'wb') as f:
+        pickle.dump(requests.utils.dict_from_cookiejar(user_profile._session.cookies), f)
+
+def load_session(user_profile: UserProfile) ->bool:
+    file_name = get_session_path(user_profile._login_user)
+
+    if not os.path.exists(file_name) or not os.path.isfile(file_name):
+        return False
+
+    with open(file_name, 'rb') as f:
+        session = requests.session()
+        session.cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
+        session.headers.update(default_http_header())
+        session.headers.update({'X-CSRFToken': session.cookies.get_dict()['csrftoken']})
+        user_profile._session = session
+    return True
+
+def get_password(username: str) ->str:
+    print("username:{}".format(username))
+    print("input password:", end='')
+    password = input()
+    print("passwd:{}".format(password))
+    return password
+
+def download_pics(queue:Queue, lock:threading.Lock, stop_event: threading.Event):
     global consume_count
-    global global_count
-    global thread_running
     while True:
+        if stop_event.is_set() and queue.empty():
+            break
+        dict_info = queue.get()
+        if dict_info is None:
+            print("receive None Obj")
+            break
         lock.acquire()
-        if queue.empty() and not thread_running:
-            lock.release()
-            break
-        else:
-            dict_info = queue.get()
-            consume_count += 1
-            lock.release()
-            save_pic(dict_info['profile'], dict_info['url'], dict_info['file_name'])
+        consume_count += 1
+        print("start downloading {}th".format(consume_count))
+        lock.release()
+        save_pic(dict_info['profile'], dict_info['url'], dict_info['file_name'])
+    print("thread exit!")
 
-class Producer:
-    def __init__(self, queue: Queue, lock:threading.Lock, handler:types.FunctionType=None):
-        self._queue = queue
-        self._lock = lock
-
-    def produce(self, dict_info:Dict[str, any]):
-        while True:
-            #acquire = self._lock.acquire(timeout=1)
-            #if not acquire:
-            #    continue
-            print("enter queue")
-            self._queue.put(dict_info)
-            #self._lock.release()
-            break
-
-
-def default_http_header(empty_session_only:bool = False) -> Dict[str, str]:
-    header = {'Accept-Encoding': 'gzip, deflate',
-                  'Accept-Language': 'en-US,en;q=0.8',
-                  'Connection': 'keep-alive',
-                  'Content-Length': '0',
-                  'Host': 'www.instagram.com',
-                  'Origin': 'https://www.instagram.com',
-                  'Referer': 'https://www.instagram.com/',
-                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Safari/605.1.15',
-                  'X-Instagram-AJAX': '1',
-                  'X-Requested-With': 'XMLHttpRequest'}
-    if empty_session_only:
-        del header['Host']
-        del header['Origin']
-        del header['Referer']
-        del header['X-Instagram-AJAX']
-        del header['X-Requested-With']
-    return header
 
 def copy_session(session: requests.Session) -> requests.Session:
     """Duplicates a requests.Session."""
@@ -101,7 +97,7 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
         file_type = get_post_format(urls[-1])
         if file_type == '':
             file_type = 'jpg'
-        producer.produce({
+        user_profile._producer.produce({
                             'profile':user_profile,
                             'url': urls[-1],
                             'file_name':"{}/{}.{}".format(user_profile._dst_dir, edge['id'], file_type)})
@@ -117,7 +113,7 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
             if file_type == '':
                 file_type = 'mp4'
 
-            producer.produce({
+            user_profile._producer.produce({
                                 'profile':user_profile,
                                 'url':urls[-1],
                                 'file_name':"{}/{}.{}".format(user_profile._dst_dir, edge['id'], file_type)})
@@ -133,14 +129,14 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
         for edge in edge['edge_sidecar_to_children']['edges']:
             if edge['node']['__typename'] == 'GraphImage':
                 urls.append(edge['node']['display_url'])
-                producer.produce({
+                user_profile._producer.produce({
                                     'profile':user_profile,
                                     'url': urls[-1],
                                     'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
             elif edge['node']['__typename'] == 'GraphVideo':
                 #TODO:handle if video_url not exist in edge['node']
                 urls.append(edge['node']['video_url'])
-                producer.produce({
+                user_profile._producer.produce({
                                     'profile':user_profile,
                                     'url':urls[-1],
                                     'file_name':"{}/{}.mp4".format(user_profile._dst_dir, edge['node']['id'])})
@@ -151,14 +147,17 @@ def graphql_query_shortcode_sidecar(user_profile: UserProfile, variables: Dict[s
     edges = graphql_query_shortcode(user_profile, variables,
                                     lambda b:b['data']['shortcode_media']['edge_sidecar_to_children']['edges'])
     for edge in edges:
-        #print(json.dumps(edge, indent=2))
+        print(json.dumps(edge, indent=2))
         handle_edge(user_profile, edge['node'])
 
 def graphql_query_shortcode_video(user_profile: UserProfile, variables: Dict[str, any]):
     video  = graphql_query_shortcode(user_profile, variables, lambda b:b['data']['shortcode_media'])
+    print(json.dumps(video, indent=2))
     handle_edge(user_profile, video)
 
-def graphql_query_shortcode(user_profile: UserProfile, variables: Dict[str, any], extractor: Callable[[Dict[str,any]], Dict[str,any]]) ->Dict[str, any]:
+def graphql_query_shortcode(user_profile: UserProfile,
+                            variables: Dict[str, any],
+                            extractor: Callable[[Dict[str,any]], Dict[str,any]]) ->Dict[str, any]:
     grapql_query_template = "https://www.instagram.com/graphql/query/?{}"
     with copy_session(user_profile._session) as tmpsession:
         tmpsession.headers.update(default_http_header(empty_session_only=True))
@@ -184,7 +183,6 @@ def graphql_query_shortcode(user_profile: UserProfile, variables: Dict[str, any]
 
 def get_profile(user_profile:UserProfile):
     '''declare global variables'''
-    global thread_running
     global crawl_count
 
     profile_url = "https://www.instagram.com/{}/?__a=1".format(user_profile._user_name)
@@ -215,10 +213,8 @@ def get_profile(user_profile:UserProfile):
         for edge in user_info['edge_owner_to_timeline_media']['edges']:
             crawl_count += 1
             handle_edge(user_profile, edge['node'])
-        if not has_next:
-            thread_running = False
 
-def login() ->requests.Session:
+def login(user_profile: UserProfile):
     HOST = "https://www.instagram.com/"
     session = requests.Session()
     session.cookies.update({'sessionid':'', 'mid':'', 'ig_pr':'1',
@@ -229,10 +225,10 @@ def login() ->requests.Session:
     session.headers.update({'X-CSRFToken':session.cookies.get_dict()["csrftoken"]})
     print("csrftoken={}".format(session.cookies.get_dict()["csrftoken"]))
 
-    user = "ghostwyd"
-    passwd = "Wudong41+"
+    user = user_profile._login_user
+    password = get_password(user)
     login = session.post('https://www.instagram.com/accounts/login/ajax/',
-                             data={'password': passwd, 'username': user}, allow_redirects=True)
+                             data={'password': password, 'username': user}, allow_redirects=True)
 
     if login.status_code != 200:
         print(login.reason)
@@ -252,17 +248,15 @@ def login() ->requests.Session:
     if not resp_json['authenticated']:
         raise LoginFailedException(resp_json['authenticated'])
 
-    return session
+    user_profile.set_session(session)
 
 def graphql_query_post(user_profile:UserProfile):
-    global thread_running
     global global_count
     global crawl_count
 
     #judge if user has any post
     if user_profile._post_count == 0:
         print("{} has not post anything yet!".format(user_profile._user_name))
-        thread_running = False
         return
     global_count = user_profile._post_count
 
@@ -312,12 +306,8 @@ def graphql_query_post(user_profile:UserProfile):
                 crawl_count +=1
                 handle_edge(user_profile, edge['node'])
 
-            if not has_next:
-                thread_running = False
-
             '''too much request will case 429'''
             time.sleep(2)
-
 
 def save_pic(user_profile: UserProfile, url: str, file_name: str) ->bool:
     if os.path.exists(file_name):
@@ -360,43 +350,54 @@ def get_dst_dir(base_dir: str, user_name: str) ->str:
         base_dir = base_dir.rstrip("/")
     return "{}/{}".format(base_dir, user_name)
 
-if __name__ == "__main__":
+def main():
     '''get pararmeters from user'''
     parser = argparse.ArgumentParser(description='download user\'s posts from instagram',
                                     epilog='the abave specifices how to use this tool')
     parser.add_argument('--user', help="specifice the user you want to download posts", type=str, required=True, metavar="ghostwyd")
     parser.add_argument('--download-dir', help="the dir where you want to save the posts", type=str, required=False, metavar="./", default='./')
     parser.add_argument('--thread-num', help="download thread num", type=int, required=False, metavar="./", default=5)
+    parser.add_argument('--login-user', help="specifice which accounter you want to log in", type=str, required=True, metavar="ghostwyd")
     #parser.print_help()
+
     args = parser.parse_args()
     dict_args = vars(args)
 
     user_name = dict_args["user"]
     thread_num = dict_args['thread_num']
+    login_user = dict_args['login_user']
+    download_dir = dict_args['download_dir']
 
     '''create UserProfile'''
-    user_profile = UserProfile(user_name)
+    lock = threading.Lock()
+    queue = Queue()
+    producer = Producer(queue, lock)
+    user_profile = UserProfile(login_user, user_name, producer)
     user_profile.set_dst_dir(get_dst_dir(dict_args["download_dir"], user_name))
     mkdir(user_profile._dst_dir)
 
     '''start dowonlad thread'''
     threads = []
-    queue = Queue()
-    lock = threading.Lock()
-    producer = Producer(queue, lock)
+    stop_event = threading.Event()
     for i in range(thread_num):
-        threads.append(Thread(target=download_pics, args=(queue, lock)))
+        threads.append(Thread(target=download_pics, args=(queue, lock, stop_event)))
     for i in range(thread_num):
         threads[i].start()
 
     '''action'''
-    user_profile.set_session(login())
+    if not load_session(user_profile):
+        login(user_profile)
+    save_session(user_profile)
     print("begin get_profile")
     get_profile(user_profile)
     print("begin graphql_query_post")
     graphql_query_post(user_profile)
 
     '''stop  threads'''
+    stop_event.set()
     for i in range(thread_num):
         threads[i].join()
     print("finish all threads")
+
+if __name__ == "__main__":
+    main()
