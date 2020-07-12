@@ -14,6 +14,5 @@ setup(
         license='MIT',
         entry_points={'console_scripts': ['instagram_download=instagram_download.login_instagram:main']},
         py_modules = ['instagram_download.user', 'instagram_download.util'],
-        #packages=['instagram_download', 'instagram_download.user', 'instagram_download.util']
-        packages=find_packages()
+        packages=['instagram_download', 'instagram_download.user', 'instagram_download.util']
         )

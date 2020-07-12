@@ -18,3 +18,7 @@ class ParamInvalidException(Exception):
 class LoginFailedException(Exception):
     def __init(self, arg):
         self.argCodes = arg
+
+class UserNotExistException(Exception):
+    def __init(self, arg):
+        self.argCodes = arg

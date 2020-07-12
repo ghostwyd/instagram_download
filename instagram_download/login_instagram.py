@@ -17,11 +17,11 @@ from queue import Queue
 from urllib import parse
 import pickle
 
-'''user define pkg'''
-from util.util import *
-from util.exception import *
-from util.file import mkdir
-from user.user_profile import *
+'''user defined modules'''
+from .util.util import *
+from .util.exception import *
+from .util.file import mkdir
+from .user.user_profile import *
 
 consume_count = 0
 crawl_count = 0
@@ -135,11 +135,18 @@ def handle_edge(user_profile: UserProfile, edge:Dict[str, any]):
                                     'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
             elif edge['node']['__typename'] == 'GraphVideo':
                 #TODO:handle if video_url not exist in edge['node']
-                urls.append(edge['node']['video_url'])
-                user_profile._producer.produce({
+                if 'video_url' in edge['node']:
+                    urls.append(edge['node']['video_url'])
+                    user_profile._producer.produce({
                                     'profile':user_profile,
                                     'url':urls[-1],
                                     'file_name':"{}/{}.mp4".format(user_profile._dst_dir, edge['node']['id'])})
+                elif 'display_url' in edge['node']:
+                    urls.append(edge['node']['display_url'])
+                    user_profile._producer.produce({
+                                    'profile':user_profile,
+                                    'url':urls[-1],
+                                    'file_name':"{}/{}.jpg".format(user_profile._dst_dir, edge['node']['id'])})
 
     print("download [{}/{}] {}".format(crawl_count, user_profile._post_count, ' '.join(urls)))
 
@@ -189,6 +196,10 @@ def get_profile(user_profile:UserProfile):
     print(profile_url)
     with copy_session(user_profile._session) as tmpsession:
         resp = user_profile._session.get(profile_url)
+        if resp.status_code == 404:
+            print("user {} not exist".format(user_profile._user_name))
+            raise UserNotExistException(resp.status_code)
+            sys.exit(404)
         if resp.status_code != 200:
             print("unexpected status_code:{}".format(resp.status_code))
             raise BadStatusCodeException(resp.status_code)
