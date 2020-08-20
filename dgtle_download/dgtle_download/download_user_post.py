@@ -22,7 +22,6 @@ class UriInfo():
         return self._download_dir
 
 def mkdir_p(dir_path):
-    print("dir:{}", dir_path)
     if os.path.exists(dir_path):
         return
     os.mkdir(dir_path, 0o744)
@@ -30,7 +29,6 @@ def mkdir_p(dir_path):
 def get_request_with_retry(url):
     cnt = 0
     while cnt < 3:
-        rsp = requests.get(url)
         try:
             rsp = requests.get(url)
             return rsp, None
@@ -118,7 +116,7 @@ if __name__ == "__main__":
     print(socket.gethostbyname('www.baidu.com'))
 
     user_id = "4ydqrw74"
-    worker_cnt = 40
+    worker_cnt = 10
 
     thread_list = []
     for i in range(worker_cnt):
